@@ -238,6 +238,10 @@ run() {
     addJava "-Dsbt.cygwin=true"
   fi
   
+  if [[ "$jni_dir" != "" ]]; then
+    addJava "-Djava.library.path=${jni_dir}"
+  fi
+  
   # check java version
   if [[ ! $no_version_check ]]; then
     java_version_check

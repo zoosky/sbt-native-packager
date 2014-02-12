@@ -1,0 +1,8 @@
+# First check we can run inside sbt
+> run
+# Now stage a distribution
+> stage
+# Now run the staged script file and make sure it still works.
+> show scriptClasspath
+> checkNatives
+> checkScript

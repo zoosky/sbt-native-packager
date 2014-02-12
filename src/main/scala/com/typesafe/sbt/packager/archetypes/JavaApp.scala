@@ -19,6 +19,8 @@ import SbtNativePackager._
  *  **NOTE:  EXPERIMENTAL**   This currently only supports universal distributions.
  */
 object JavaAppPackaging {
+  
+  val JNI_LIB_DIR = "jni"
 
   def settings: Seq[Setting[_]] = Seq(
     // Here we record the classpath as it's added to the mappings separately, so
@@ -35,13 +37,16 @@ object JavaAppPackaging {
     scriptClasspathOrdering <<= (scriptClasspathOrdering) map { _.distinct },
     mappings in Universal <++= scriptClasspathOrdering,
     scriptClasspath <<= scriptClasspathOrdering map makeRelativeClasspathNames,
+    scriptNeedsJniSupport <<= scriptClasspathOrdering map needsJniSupport,
     bashScriptExtraDefines := Nil,
     bashScriptConfigLocation <<= bashScriptConfigLocation ?? None,
-    bashScriptDefines <<= (Keys.mainClass in Compile, scriptClasspath, bashScriptExtraDefines, bashScriptConfigLocation) map { (mainClass, cp, extras, config) =>
+    bashScriptDefines <<= (Keys.mainClass in Compile, scriptClasspath, bashScriptExtraDefines, bashScriptConfigLocation, scriptNeedsJniSupport) map { (mainClass, cp, extras, config, hasJni) =>
+      val defines =
+        extras ++ (if(hasJni) List("declare -r jni_dir=\"${lib_dir}/jni\"") else Nil)
       val hasMain =
         for {
           cn <- mainClass
-        } yield JavaAppBashScript.makeDefines(cn, appClasspath = cp, extras = extras, configFile = config)
+        } yield JavaAppBashScript.makeDefines(cn, appClasspath = cp, extras = defines, configFile = config)
       hasMain getOrElse Nil
     },
     // TODO - Overridable bash template.
@@ -65,15 +70,21 @@ object JavaAppPackaging {
       } yield s -> ("bin/" + name + ".bat")
     })
 
-  def makeRelativeClasspathNames(mappings: Seq[(File, String)]): Seq[String] =
-    for {
-      (file, name) <- mappings
-    } yield {
-      // Here we want the name relative to the lib/ folder...
-      // For now we just cheat...
-      if (name startsWith "lib/") name drop 4
-      else "../" + name
-    }
+  def makeRelativeClasspathNames(mappings: Seq[(File, String)]): Seq[String] = {
+      for {
+        (file, name) <- mappings
+        // We keep the natives off the classpath. They need to use `java.library.path`
+        if !(name matches "lib/jni/.*")
+      } yield {
+        // Here we want the name relative to the lib/ folder...
+        // For now we just cheat...
+        if (name startsWith "lib/") name drop 4
+        else "../" + name
+      }
+  }
+  
+  def needsJniSupport(mappings: Seq[(File, String)]): Boolean =
+    mappings.exists(_._2 matches "lib/jni/.*")
 
   def makeUniversalBinScript(defines: Seq[String], tmpDir: File, name: String, sourceDir: File): Option[File] =
     if (defines.isEmpty) None
@@ -109,6 +120,15 @@ object JavaAppPackaging {
       revision +
       artifactClassifier.filterNot(_.isEmpty).map("-" + _).getOrElse("") +
       ".jar")
+      
+  
+  // Helper method to figure out what the artifact filename should be.  We special case JAR files,
+  // but we actually tree JNI libs specially.
+  def makeArtifactFileName(module: ModuleID, artifact: Artifact, file: File): String = 
+    artifact.extension match {
+      case "so" | "jnilib" | "dll" => JNI_LIB_DIR + "/" + file.getName  // TODO - Don't hardcode this
+      case _ => makeJarName(module.organization, module.name, module.revision, artifact.name, artifact.classifier)
+    }
 
   // Determines a nicer filename for an attributed jar file, using the 
   // ivy metadata if available.
@@ -116,7 +136,7 @@ object JavaAppPackaging {
     val filename: Option[String] = for {
       module <- dep.metadata.get(AttributeKey[ModuleID]("module-id"))
       artifact <- dep.metadata.get(AttributeKey[Artifact]("artifact"))
-    } yield makeJarName(module.organization, module.name, module.revision, artifact.name, artifact.classifier)
+    } yield makeArtifactFileName(module, artifact, dep.data)
     filename.getOrElse(dep.data.getName)
   }
 

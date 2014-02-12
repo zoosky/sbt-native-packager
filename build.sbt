@@ -41,4 +41,3 @@ scriptedLaunchOpts <+= version apply { v => "-Dproject.version="+v }
 
 
 
-

@@ -21,6 +21,7 @@ object Keys extends linux.Keys
   val scriptClasspathOrdering = TaskKey[Seq[(File, String)]]("scriptClasspathOrdering", "The order of the classpath used at runtime for the bat/bash scripts.")
   val projectDependencyArtifacts = TaskKey[Seq[Attributed[File]]]("projectDependencyArtifacts", "The set of exported artifacts from our dependent projects.")
   val scriptClasspath = TaskKey[Seq[String]]("scriptClasspath", "A list of relative filenames (to the lib/ folder in the distribution) of what to include on the classpath.")
+  val scriptNeedsJniSupport = TaskKey[Boolean]("scriptNeedsJniSupport", "Detects whether or not there is JNI support required in the script (a jni/ lib in the distribution).")
   val makeBatScript = TaskKey[Option[File]]("makeBatScript", "Creates or discovers the bat script used by this project.")
   val batScriptReplacements = TaskKey[Seq[(String, String)]]("batScriptReplacements",
     """|Replacements of template parameters used in the windows bat script.
